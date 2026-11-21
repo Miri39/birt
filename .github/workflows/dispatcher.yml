@@ -1,0 +1,30 @@
+name: dispatcher
+on:
+  schedule:
+    - cron: "0 6 * * *"
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+  actions: write
+concurrency: dispatcher
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  MAX_PER_DAY: ${{ vars.MAX_PER_DAY || '2' }}
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pick the next ready ticket
+        run: |
+          today=$(date -u +%F)
+          started=$(gh run list --workflow agent-author.yml --created ">=$today" --limit 100 --json databaseId --jq length)
+          echo "agent runs today: $started of $MAX_PER_DAY"
+          if [ "$started" -ge "$MAX_PER_DAY" ]; then echo "daily cap reached"; exit 0; fi
+          n=$(gh issue list --label ready --state open --limit 50 --json number --jq 'sort_by(.number) | .[0].number // empty')
+          if [ -z "$n" ]; then echo "no ready tickets"; exit 0; fi
+          gh issue edit "$n" --remove-label ready --add-label in-progress
+          gh workflow run agent-author.yml -f issue="$n"
+          echo "dispatched ticket #$n"

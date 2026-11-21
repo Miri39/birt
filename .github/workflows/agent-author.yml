@@ -1,35 +1,43 @@
 name: agent-author
 on:
-  issues:
-    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number
+        required: true
 permissions:
   contents: read
+  issues: read
   models: read
+concurrency: agent-${{ inputs.issue }}
 jobs:
   author:
-    if: github.event.label.name == 'dev' || github.event.label.name == 'qa'
     runs-on: ubuntu-latest
+    env:
+      N: ${{ inputs.issue }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: git checkout -b agent/${{ github.event.issue.number }}
+      - name: Fetch ticket
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$N" =~ ^[0-9]+$ ]] || { echo "bad issue number"; exit 1; }
+          gh issue view "$N" --json title,body,labels > ticket.json
+      - run: git checkout -b "agent/$N"
       - run: node scripts/agent.mjs author
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          LABEL: ${{ github.event.label.name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ inputs.issue }}
           MODEL_ADA: ${{ vars.MODEL_ADA }}
           MODEL_BO: ${{ vars.MODEL_BO }}
           MODEL_QA: ${{ vars.MODEL_QA }}
       - name: Push, open PR, enable auto-merge
         env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          N: ${{ github.event.issue.number }}
         run: |
           git config user.name "factory-agent"
           git config user.email "agent@users.noreply.github.com"
