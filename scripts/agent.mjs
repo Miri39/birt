@@ -4,12 +4,10 @@ import { execSync } from "node:child_process";
 
 const cmd = process.argv[2];
 const env = process.env;
-const modelOf = (a) => env[`MODEL_${a.toUpperCase()}`] || "openai/gpt-4.1";
-const pair = (n) => (n % 2 ? { author: "ada", reviewer: "bo" } : { author: "bo", reviewer: "ada" });
-const now = () => new Date().toISOString();
-
 const BASE = (env.LLM_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").replace(/\/$/, "");
 const modelOf = (a) => env[`MODEL_${a.toUpperCase()}`] || "gemini-2.5-flash";
+const pair = (n) => (n % 2 ? { author: "ada", reviewer: "bo" } : { author: "bo", reviewer: "ada" });
+const now = () => new Date().toISOString();
 
 async function ask(agent, system, user) {
   const r = await fetch(`${BASE}/chat/completions`, {
@@ -28,14 +26,13 @@ async function ask(agent, system, user) {
   if (!out) throw new Error("LLM returned no content: " + text.slice(0, 300));
   return out;
 }
-
 const json = (t) => JSON.parse(t.trim().replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""));
 const audit = (e) => {
   mkdirSync("audit", { recursive: true });
   appendFileSync("audit/log.jsonl", JSON.stringify({ time: now(), ...e }) + "\n");
 };
 
-// What each author may write. No executable JS that Eleventy or CI would run outside tests/.
+// What each author may write.
 function allowed(p, role) {
   if (!/^[\w\-./]+$/.test(p) || p.includes("..") || p.split("/").some((s) => s.startsWith("."))) return false;
   const test = /^tests\/[\w\-./]+\.test\.js$/.test(p);

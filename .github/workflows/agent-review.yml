@@ -4,11 +4,11 @@ permissions:
   contents: read
   issues: read
   pull-requests: write
-  models: read
 env:
   GITHUB_TOKEN: ${{ github.token }}
   HEAD_REF: ${{ github.head_ref }}
   PR: ${{ github.event.pull_request.number }}
+  LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
   MODEL_ADA: ${{ vars.MODEL_ADA }}
   MODEL_BO: ${{ vars.MODEL_BO }}
   MODEL_QA: ${{ vars.MODEL_QA }}
@@ -26,6 +26,8 @@ jobs:
           echo "ISSUE_NUMBER=${HEAD_REF#agent/}" >> "$GITHUB_ENV"
           gh issue view "${HEAD_REF#agent/}" --json title,body,labels > ticket.json
       - run: node scripts/agent.mjs review
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       - if: always() && hashFiles('verdict.md') != ''
         run: gh pr comment "$PR" --body-file verdict.md
   qa:
@@ -42,5 +44,7 @@ jobs:
           gh issue view "${HEAD_REF#agent/}" --json title,body,labels > ticket.json
       - run: npm ci && npm run build
       - run: node scripts/agent.mjs qa
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       - if: always() && hashFiles('verdict.md') != ''
         run: gh pr comment "$PR" --body-file verdict.md
