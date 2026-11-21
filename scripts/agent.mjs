@@ -8,18 +8,27 @@ const modelOf = (a) => env[`MODEL_${a.toUpperCase()}`] || "openai/gpt-4.1";
 const pair = (n) => (n % 2 ? { author: "ada", reviewer: "bo" } : { author: "bo", reviewer: "ada" });
 const now = () => new Date().toISOString();
 
+const BASE = (env.LLM_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").replace(/\/$/, "");
+const modelOf = (a) => env[`MODEL_${a.toUpperCase()}`] || "gemini-2.5-flash";
+
 async function ask(agent, system, user) {
-  const r = await fetch("https://models.github.ai/inference/chat/completions", {
+  const r = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${env.LLM_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: modelOf(agent), temperature: 0.3,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
     }),
   });
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-  return (await r.json()).choices[0].message.content;
+  const text = await r.text();
+  if (!r.ok) throw new Error(`LLM ${r.status}: ${text.slice(0, 500)}`);
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(`LLM returned non-JSON: ${text.slice(0, 200)}`); }
+  const out = data.choices?.[0]?.message?.content;
+  if (!out) throw new Error("LLM returned no content: " + text.slice(0, 300));
+  return out;
 }
+
 const json = (t) => JSON.parse(t.trim().replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""));
 const audit = (e) => {
   mkdirSync("audit", { recursive: true });
