@@ -20,7 +20,7 @@ jobs:
       - name: Pick the next ready ticket
         run: |
           today=$(date -u +%F)
-          tickets=$(gh run list --workflow agent-author.yml --created ">=$today" --limit 100 --json displayTitle --jq '[.[].displayTitle] | unique')
+          tickets=$(gh run list --workflow agent-author.yml --created ">=$today" --limit 100 --json displayTitle --jq '[.[].displayTitle | select(test("^ticket #[0-9]+$"))] | unique')
           count=$(echo "$tickets" | jq length)
           echo "tickets worked on today: $count of $MAX_PER_DAY"
           n=$(gh issue list --label ready --state open --limit 50 --json number --jq 'sort_by(.number) | .[0].number // empty')
