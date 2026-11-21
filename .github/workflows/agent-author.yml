@@ -1,5 +1,5 @@
 name: agent-author
-run-name: ticket #${{ inputs.issue }}
+run-name: "ticket #${{ inputs.issue }}"
 on:
   workflow_dispatch:
     inputs:

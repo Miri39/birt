@@ -20,11 +20,16 @@ jobs:
       - name: Pick the next ready ticket
         run: |
           today=$(date -u +%F)
-          started=$(gh run list --workflow agent-author.yml --created ">=$today" --limit 100 --json databaseId --jq length)
-          echo "agent runs today: $started of $MAX_PER_DAY"
-          if [ "$started" -ge "$MAX_PER_DAY" ]; then echo "daily cap reached"; exit 0; fi
+          tickets=$(gh run list --workflow agent-author.yml --created ">=$today" --limit 100 --json displayTitle --jq '[.[].displayTitle] | unique')
+          count=$(echo "$tickets" | jq length)
+          echo "tickets worked on today: $count of $MAX_PER_DAY"
           n=$(gh issue list --label ready --state open --limit 50 --json number --jq 'sort_by(.number) | .[0].number // empty')
           if [ -z "$n" ]; then echo "no ready tickets"; exit 0; fi
+          already=$(echo "$tickets" | jq --arg t "ticket #$n" 'index($t) != null')
+          if [ "$count" -ge "$MAX_PER_DAY" ] && [ "$already" != "true" ]; then
+            echo "daily cap reached, ticket #$n waits for tomorrow"
+            exit 0
+          fi
           gh issue edit "$n" --remove-label ready --add-label in-progress
           gh workflow run agent-author.yml -f issue="$n"
           echo "dispatched ticket #$n"
