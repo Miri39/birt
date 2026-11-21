@@ -1,0 +1,39 @@
+name: agent-author
+on:
+  issues:
+    types: [labeled]
+permissions:
+  contents: read
+  models: read
+jobs:
+  author:
+    if: github.event.label.name == 'dev' || github.event.label.name == 'qa'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: git checkout -b agent/${{ github.event.issue.number }}
+      - run: node scripts/agent.mjs author
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LABEL: ${{ github.event.label.name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          MODEL_ADA: ${{ vars.MODEL_ADA }}
+          MODEL_BO: ${{ vars.MODEL_BO }}
+          MODEL_QA: ${{ vars.MODEL_QA }}
+      - name: Push, open PR, enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          N: ${{ github.event.issue.number }}
+        run: |
+          git config user.name "factory-agent"
+          git config user.email "agent@users.noreply.github.com"
+          git add -A && git commit -m "agent: ticket #$N"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" HEAD
+          gh pr create --title "Ticket #$N" --body "Closes #$N" --base main --head "agent/$N"
+          gh pr merge "agent/$N" --auto --squash

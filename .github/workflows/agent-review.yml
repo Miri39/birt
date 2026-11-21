@@ -1,0 +1,46 @@
+name: agent-review
+on: pull_request
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+  models: read
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  HEAD_REF: ${{ github.head_ref }}
+  PR: ${{ github.event.pull_request.number }}
+  MODEL_ADA: ${{ vars.MODEL_ADA }}
+  MODEL_BO: ${{ vars.MODEL_BO }}
+  MODEL_QA: ${{ vars.MODEL_QA }}
+jobs:
+  review:
+    if: startsWith(github.head_ref, 'agent/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Fetch ticket
+        run: |
+          echo "ISSUE_NUMBER=${HEAD_REF#agent/}" >> "$GITHUB_ENV"
+          gh issue view "${HEAD_REF#agent/}" --json title,body,labels > ticket.json
+      - run: node scripts/agent.mjs review
+      - if: always() && hashFiles('verdict.md') != ''
+        run: gh pr comment "$PR" --body-file verdict.md
+  qa:
+    if: startsWith(github.head_ref, 'agent/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Fetch ticket
+        run: |
+          echo "ISSUE_NUMBER=${HEAD_REF#agent/}" >> "$GITHUB_ENV"
+          gh issue view "${HEAD_REF#agent/}" --json title,body,labels > ticket.json
+      - run: npm ci && npm run build
+      - run: node scripts/agent.mjs qa
+      - if: always() && hashFiles('verdict.md') != ''
+        run: gh pr comment "$PR" --body-file verdict.md

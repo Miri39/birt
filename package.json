@@ -1,0 +1,23 @@
+{
+  "name": "birt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test",
+    "build": "eleventy --input=src --pathprefix=/birt/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Miri39/birt.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Miri39/birt/issues"
+  },
+  "homepage": "https://github.com/Miri39/birt#readme",
+  "devDependencies": {
+    "@11ty/eleventy": "^3.1.8"
+  }
+}
