@@ -28,6 +28,7 @@ jobs:
           [[ "$N" =~ ^[0-9]+$ ]] || { echo "bad issue number"; exit 1; }
           gh issue view "$N" --json title,body,labels > ticket.json
       - run: git checkout -b "agent/$N"
+      - run: npm ci
       - run: node scripts/agent.mjs author
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
