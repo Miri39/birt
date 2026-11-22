@@ -8,18 +8,20 @@ on:
         required: true
 permissions:
   contents: read
-  issues: read
+  issues: write
 concurrency: agent-${{ inputs.issue }}
 jobs:
   author:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       N: ${{ inputs.issue }}
       GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { persist-credentials: false }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: 22 }
       - name: Fetch ticket
         env:
@@ -37,13 +39,27 @@ jobs:
           MODEL_ADA: ${{ vars.MODEL_ADA }}
           MODEL_BO: ${{ vars.MODEL_BO }}
           MODEL_QA: ${{ vars.MODEL_QA }}
-      - name: Push, open PR, enable auto-merge
+      - name: Push and open the PR (auto-merge only if the self-check passed)
         env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
         run: |
           git config user.name "factory-agent"
           git config user.email "agent@users.noreply.github.com"
-          git add -A && git commit -m "agent: ticket #$N"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" HEAD
-          gh pr create --title "Ticket #$N" --body "Closes #$N" --base main --head "agent/$N"
-          gh pr merge "agent/$N" --auto --squash
+          git add -A
+          if git diff --cached --quiet; then echo "the agent changed nothing"; exit 1; fi
+          status=$(cat selfcheck.status 2>/dev/null || echo fail)
+          title="Ticket #$N"
+          [ "$status" = pass ] || title="Ticket #$N (self-check failed)"
+          git commit -m "agent: ticket #$N"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" HEAD
+          gh pr create --title "$title" --body-file pr-body.md --base main --head "agent/$N"
+          if [ "$status" = pass ]; then gh pr merge "agent/$N" --auto --squash; fi
+      - name: Retry the ticket, or park it after 3 failed runs
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "$N" --body "author run failed, see $RUN_URL"
+          tries=$(gh issue view "$N" --json comments --jq '[.comments[].body | select(startswith("author run failed"))] | length')
+          gh issue edit "$N" --remove-label in-progress
+          if [ "$tries" -lt 3 ]; then gh issue edit "$N" --add-label ready; else gh issue edit "$N" --add-label needs-human; fi
