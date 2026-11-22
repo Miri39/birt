@@ -1,0 +1,112 @@
+name: qa-daily
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency: qa-daily
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  SITE_URL: https://miri39.github.io/birt/
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Run the checks
+        run: |
+          set +e
+          (npm run build && npm test) > build.log 2>&1; echo $? > build.code
+          npm audit --audit-level=high > audit.log 2>&1; echo $? > audit.code
+          node scripts/linkcheck.mjs > links.log 2>&1; echo $? > links.code
+          tail -n 5 build.log audit.log links.log
+      - name: File tickets for failures
+        env:
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+        run: |
+          open_bug() { # title, logfile, label, hint
+            if gh issue list --state open --label bug --limit 100 --json title --jq '.[].title' | grep -Fxq "$1"; then
+              echo "already open: $1"; return 1
+            fi
+            { echo "Found by qa-daily on $(date -u +%F)."; echo; echo "$4"; echo
+              echo "## Acceptance criteria"; echo "- the check that failed passes again"; echo "- npm run build and npm test stay green"; echo
+              echo '```'; tail -c 3000 "$2"; echo '```'; } > body.md
+            gh issue create --title "$1" --label bug --label "$3" --body-file body.md
+          }
+          [ "$(cat build.code)" = 0 ] || open_bug "Main fails build or tests" build.log ready "Fix the cause in src/ or tests/."
+          case "$(cat links.code)" in
+            1) open_bug "Broken links on the live site" links.log ready "Fix or remove the links listed below in src/." ;;
+            2) open_bug "Live site is not reachable" links.log needs-human "The live site did not answer. A deploy may be waiting for approval under Actions, deploy." ;;
+          esac
+          if [ "$(cat audit.code)" != 0 ]; then
+            npm audit fix --ignore-scripts > fix.log 2>&1 || true
+            if git diff --quiet package.json package-lock.json || ! npm audit --audit-level=high > /dev/null 2>&1; then
+              git checkout -- package.json package-lock.json
+              open_bug "Vulnerable dependencies need a decision" audit.log needs-human "npm audit fix could not resolve these inside the allowed version ranges."
+            elif url=$(open_bug "Vulnerable dependencies" audit.log in-progress "npm audit fix updated the lockfile. This pull request was opened by qa-daily."); then
+              n="${url##*/}"
+              git checkout -b "agent/$n"
+              mkdir -p audit
+              echo "{\"time\":\"$(date -u +%FT%TZ)\",\"who\":\"qa-daily\",\"action\":\"npm audit fix\",\"ticket\":$n}" >> audit/log.jsonl
+              git config user.name "factory-agent"
+              git config user.email "agent@users.noreply.github.com"
+              git add package.json package-lock.json audit
+              git commit -m "agent: ticket #$n"
+              git push --force "https://x-access-token:${AGENT_TOKEN}@github.com/${GH_REPO}.git" HEAD
+              GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body "Closes #$n" --base main --head "agent/$n"
+              GH_TOKEN="$AGENT_TOKEN" gh pr merge "agent/$n" --auto --squash
+            fi
+          fi
+
+  explore:
+    needs: checks
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npm run build
+      - name: Gather finished tickets
+        run: gh issue list --state closed --limit 15 --json number,title,body > criteria.json
+      - name: QA writes and runs new tests against main
+        run: node scripts/agent.mjs explore
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          MODEL_QA: ${{ vars.MODEL_QA }}
+      - name: File bugs, open the PR with passing tests
+        env:
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+        run: |
+          jq -c '.[]' qa-bugs.json | while read -r row; do
+            title=$(jq -r .title <<<"$row")
+            if gh issue list --state open --label bug --limit 100 --json title --jq '.[].title' | grep -Fxq "$title"; then
+              echo "already open: $title"; continue
+            fi
+            jq -r .body <<<"$row" > body.md
+            gh issue create --title "$title" --label bug --label ready --body-file body.md
+          done
+          if [ "$(jq length qa-keep.json)" -gt 0 ]; then
+            url=$(gh issue create --title "QA regression tests $(date -u +%F)" --label qa --label in-progress \
+              --body $'New regression tests written by qa and passing on main.\n\n## Acceptance criteria\n- the new tests pass\n- npm run build and npm test stay green')
+            n="${url##*/}"
+            git checkout -b "agent/$n"
+            git config user.name "factory-agent"
+            git config user.email "agent@users.noreply.github.com"
+            git add tests audit
+            git commit -m "agent: ticket #$n"
+            git push --force "https://x-access-token:${AGENT_TOKEN}@github.com/${GH_REPO}.git" HEAD
+            GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body "Closes #$n" --base main --head "agent/$n"
+            GH_TOKEN="$AGENT_TOKEN" gh pr merge "agent/$n" --auto --squash
+          fi
