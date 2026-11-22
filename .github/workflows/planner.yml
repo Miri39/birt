@@ -1,0 +1,49 @@
+name: planner
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency: planner
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  MIN_READY: ${{ vars.MIN_READY || '3' }}
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      enough: ${{ steps.c.outputs.enough }}
+    steps:
+      - id: c
+        run: |
+          ready=$(gh issue list --label ready --state open --limit 100 --json number --jq length)
+          echo "ready tickets: $ready, minimum $MIN_READY"
+          [ "$ready" -ge "$MIN_READY" ] && echo "enough=true" >> "$GITHUB_OUTPUT" || echo "enough=false" >> "$GITHUB_OUTPUT"
+  plan:
+    needs: count
+    if: needs.count.outputs.enough != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22 }
+      - name: List existing tickets
+        run: gh issue list --state all --limit 200 --json number,title,state --jq '.[] | "\(.state) #\(.number) \(.title)"' > issues.txt
+      - name: Planner turns roadmap wishes into tickets
+        run: node scripts/agent.mjs plan
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          MODEL_ADA: ${{ vars.MODEL_ADA }}
+      - name: Create the tickets
+        run: |
+          jq -c '.[]' planned.json | while read -r row; do
+            jq -r .body <<<"$row" > body.md
+            gh issue create --title "$(jq -r .title <<<"$row")" --label ready --body-file body.md
+          done
