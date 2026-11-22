@@ -8,6 +8,7 @@ permissions:
   contents: read
   issues: write
   actions: write
+  pull-requests: read
 concurrency: dispatcher
 env:
   GH_TOKEN: ${{ github.token }}
@@ -19,11 +20,19 @@ jobs:
     steps:
       - name: Pick the next ready ticket
         run: |
+          open_prs=$(gh pr list --state open --limit 100 --json headRefName --jq '[.[] | select(.headRefName | startswith("agent/"))] | length')
+          if [ "$open_prs" -gt 0 ]; then echo "an agent PR is still open, waiting"; exit 0; fi
+          running=$(gh run list --workflow agent-author.yml --status in_progress --json databaseId --jq length)
+          queued=$(gh run list --workflow agent-author.yml --status queued --json databaseId --jq length)
+          if [ $((running + queued)) -gt 0 ]; then echo "an author run is active, waiting"; exit 0; fi
           today=$(date -u +%F)
           tickets=$(gh run list --workflow agent-author.yml --created ">=$today" --limit 100 --json displayTitle --jq '[.[].displayTitle | select(test("^ticket #[0-9]+$"))] | unique')
           count=$(echo "$tickets" | jq length)
           echo "tickets worked on today: $count of $MAX_PER_DAY"
-          n=$(gh issue list --label ready --state open --limit 50 --json number --jq 'sort_by(.number) | .[0].number // empty')
+          n=$(gh issue list --label ready --label bug --state open --limit 50 --json number --jq 'sort_by(.number) | .[0].number // empty')
+          if [ -z "$n" ]; then
+            n=$(gh issue list --label ready --state open --limit 50 --json number --jq 'sort_by(.number) | .[0].number // empty')
+          fi
           if [ -z "$n" ]; then echo "no ready tickets"; exit 0; fi
           already=$(echo "$tickets" | jq --arg t "ticket #$n" 'index($t) != null')
           if [ "$count" -ge "$MAX_PER_DAY" ] && [ "$already" != "true" ]; then
