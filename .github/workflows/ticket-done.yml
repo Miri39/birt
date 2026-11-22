@@ -1,0 +1,21 @@
+name: ticket-done
+on:
+  pull_request:
+    types: [closed]
+permissions: {}
+jobs:
+  label:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'agent/')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Remove in-progress label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          n="${REF#agent/}"
+          [[ "$n" =~ ^[0-9]+$ ]] || exit 0
+          gh issue edit "$n" --remove-label in-progress
