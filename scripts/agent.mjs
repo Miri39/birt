@@ -10,16 +10,24 @@ const pair = (n) => (n % 2 ? { author: "ada", reviewer: "bo" } : { author: "bo",
 const now = () => new Date().toISOString();
 
 async function ask(agent, system, user) {
-  const r = await fetch(`${BASE}/chat/completions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env.LLM_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: modelOf(agent), temperature: 0.3,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-    }),
+  const body = JSON.stringify({
+    model: modelOf(agent), temperature: 0.3,
+    messages: [{ role: "system", content: system }, { role: "user", content: user }],
   });
-  const text = await r.text();
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${text.slice(0, 500)}`);
+  const headers = { Authorization: `Bearer ${env.LLM_API_KEY}`, "Content-Type": "application/json" };
+  let status, text;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const r = await fetch(`${BASE}/chat/completions`, { method: "POST", headers, body });
+    status = r.status;
+    text = await r.text();
+    if (r.ok) break;
+    const temporary = [429, 500, 502, 503, 504].includes(status);
+    if (!temporary || attempt === 4) break;
+    const wait = 5000 * 2 ** attempt; // 5s, 10s, 20s, 40s
+    console.log(`LLM ${status}, retrying in ${wait / 1000}s (attempt ${attempt + 1} of 4)`);
+    await new Promise((res) => setTimeout(res, wait));
+  }
+  if (status < 200 || status >= 300) throw new Error(`LLM ${status}: ${text.slice(0, 500)}`);
   let data;
   try { data = JSON.parse(text); } catch { throw new Error(`LLM returned non-JSON: ${text.slice(0, 200)}`); }
   const out = data.choices?.[0]?.message?.content;
