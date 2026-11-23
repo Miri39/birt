@@ -16,7 +16,9 @@ test("table 1 page meets acceptance criteria", () => {
   assert.ok(html.includes('class="author"'));
   assert.ok(html.includes('class="text"'));
   
-  const liMatches = html.match(/<li[^>]*>.*?<\/li>/gs);
+  const mainMatch = html.match(/<main>[\s\S]*?<\/main>/);
+  assert.ok(mainMatch, "main element exists");
+  const liMatches = mainMatch[0].match(/<li[^>]*>.*?<\/li>/gs);
   assert.strictEqual(liMatches ? liMatches.length : 3, 3);
   assert.ok(html.includes("Pixel"));
   assert.ok(html.includes("Moss"));

@@ -9,6 +9,14 @@
 <body>
   <header>
     <a href="{{ '/' | url }}">birt</a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="{{ '/' | url }}"{% if page.url == '/' %} aria-current="page"{% endif %}>Home</a></li>
+        <li><a href="{{ '/table-1/' | url }}"{% if page.url == '/table-1/' %} aria-current="page"{% endif %}>Table 1</a></li>
+        <li><a href="{{ '/table-2/' | url }}"{% if page.url == '/table-2/' %} aria-current="page"{% endif %}>Table 2</a></li>
+        <li><a href="{{ '/about/' | url }}"{% if page.url == '/about/' %} aria-current="page"{% endif %}>About</a></li>
+      </ul>
+    </nav>
   </header>
   <main>
     {{ content | safe }}
