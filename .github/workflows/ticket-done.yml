@@ -9,13 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REF: ${{ github.event.pull_request.head.ref }}
     steps:
       - name: Remove in-progress label
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          REF: ${{ github.event.pull_request.head.ref }}
         run: |
           n="${REF#agent/}"
           [[ "$n" =~ ^[0-9]+$ ]] || exit 0
           gh issue edit "$n" --remove-label in-progress
+      - name: Start the next ticket
+        run: gh workflow run dispatcher.yml

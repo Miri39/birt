@@ -1,7 +1,7 @@
 name: qa-daily
 on:
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "7 4 * * *"
   workflow_dispatch:
 permissions:
   contents: read
