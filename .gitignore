@@ -2,3 +2,5 @@ node_modules
 _site
 ticket.json
 verdict.md
+selfcheck.status
+pr-body.md
