@@ -166,6 +166,7 @@ if (cmd === "explore") {
   const out = json(await ask("qa", sys, `FINISHED TICKETS (JSON):\n${criteria}\n\nBUILT HTML:\n${built}`));
   const line = JSON.stringify({ time: now(), who: "qa", action: "explore", model: modelOf("qa") });
   const keep = [], bugs = [];
+  console.log(`qa proposed ${Array.isArray(out.tests) ? out.tests.length : 0} tests`);
   (Array.isArray(out.tests) ? out.tests : []).slice(0, 3).forEach((t, i) => {
     const path = `tests/qa-${date}-${i + 1}.test.js`; // fixed names: never overwrites an existing test
     if (!allowed(path, "qa") || typeof t.content !== "string" || t.content.length > 20000) return;
@@ -176,7 +177,10 @@ if (cmd === "explore") {
     } catch (e) {
       const log = `${e.stdout || ""}\n${e.stderr || ""}`;
       unlinkSync(path);
-      if (!/AssertionError/.test(log)) return; // a broken test is not a bug in the site
+      if (!/AssertionError/.test(log)) { // a broken test is not a bug in the site
+        console.log(`discarded "${t.title}", not an assertion failure: ${log.replace(/\s+/g, " ").slice(0, 300)}`);
+        return;
+      }
       const ref = Number.isInteger(t.ticket) ? ` (ticket #${t.ticket})` : "";
       bugs.push({
         title: `QA: ${String(t.title || "failing check").slice(0, 80)}`,
