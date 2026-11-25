@@ -66,6 +66,16 @@ jobs:
             fi
           fi
 
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## qa-daily checks"
+            echo "- build and tests: $(grep -E '^# (pass|fail)' build.log | tr '\n' ' ')(exit $(cat build.code))"
+            echo "- npm audit: $(grep -E 'found [0-9]+ vulnerabilities' audit.log | tail -1) (exit $(cat audit.code))"
+            echo "- live site: $(tail -n 1 links.log) (exit $(cat links.code))"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   explore:
     needs: checks
     if: ${{ !cancelled() }}
@@ -80,7 +90,9 @@ jobs:
       - name: Gather finished tickets
         run: gh issue list --state closed --limit 15 --json number,title,body > criteria.json
       - name: QA writes and runs new tests against main
-        run: node scripts/agent.mjs explore
+        run: |
+          set -o pipefail
+          node scripts/agent.mjs explore 2>&1 | tee explore.log
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
@@ -110,3 +122,7 @@ jobs:
             GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body "Closes #$n" --base main --head "agent/$n"
             GH_TOKEN="$AGENT_TOKEN" gh pr merge "agent/$n" --auto --squash
           fi
+      - name: Summary
+        if: always()
+        run: |
+          { echo "## qa explore"; echo '```'; cat explore.log 2>/dev/null || echo "no output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
