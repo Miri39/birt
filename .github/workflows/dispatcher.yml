@@ -17,7 +17,22 @@ jobs:
   pick:
     runs-on: ubuntu-latest
     steps:
+      - name: Unstick open agent PRs (update branch, enable auto-merge, merge if already green)
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
+        run: |
+          for pr in $(gh pr list --state open --limit 50 --json number,headRefName --jq '.[] | select(.headRefName | startswith("agent/")) | .number'); do
+            read -r state auto < <(gh pr view "$pr" --json mergeStateStatus,autoMergeRequest --jq '"\(.mergeStateStatus) \(.autoMergeRequest != null)"')
+            echo "PR #$pr: $state, auto-merge $auto"
+            [ "$state" = BEHIND ] && { gh pr update-branch "$pr" || true; }
+            if [ "$auto" = false ]; then
+              if [ "$state" = CLEAN ]; then gh pr merge "$pr" --squash || true
+              else gh pr merge "$pr" --auto --squash || true; fi
+            fi
+          done
       - name: Pick the next ready ticket
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           open_prs=$(gh pr list --state open --limit 100 --json headRefName --jq '[.[] | select(.headRefName | startswith("agent/"))] | length')
           if [ "$open_prs" -gt 0 ]; then echo "an agent PR is still open, waiting"; exit 0; fi
