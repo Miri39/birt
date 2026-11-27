@@ -66,15 +66,26 @@ jobs:
             fi
           fi
 
-      - name: Summary
+      - name: Report
         if: always()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           {
-            echo "## qa-daily checks"
-            echo "- build and tests: $(grep -E '^# (pass|fail)' build.log | tr '\n' ' ')(exit $(cat build.code))"
-            echo "- npm audit: $(grep -E 'found [0-9]+ vulnerabilities' audit.log | tail -1) (exit $(cat audit.code))"
-            echo "- live site: $(tail -n 1 links.log) (exit $(cat links.code))"
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "### QA checks, $(date -u +%F), [run]($RUN_URL)"
+            echo
+            echo "- **Build and tests:** builds the site and runs every test in tests/ ($(ls tests/*.test.js | wc -l) test files). Result: $(grep -E '^# (pass|fail)' build.log | tr '\n' ' ')(exit $(cat build.code))"
+            echo "- **Dependency audit:** npm audit for high severity vulnerabilities. Result: $(grep -E 'found [0-9]+ vulnerabilities' audit.log | tail -1) (exit $(cat audit.code))"
+            echo "- **Live site:** crawls the published site, follows every link and asset, and flags broken ones or an unreachable site. Result: $(tail -n 1 links.log) (exit $(cat links.code))"
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          num=$(gh issue list --label qa-log --state open --json number --jq '.[0].number // empty')
+          if [ -z "$num" ]; then
+            gh label create qa-log --description "Daily QA reports" 2>/dev/null || true
+            url=$(gh issue create --title "QA log" --label qa-log --body "One comment per qa-daily run, written by the QA workflow.")
+            num="${url##*/}"
+          fi
+          gh issue comment "$num" --body-file report.md
 
   explore:
     needs: checks
@@ -122,7 +133,23 @@ jobs:
             GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body "Closes #$n" --base main --head "agent/$n"
             GH_TOKEN="$AGENT_TOKEN" gh pr merge "agent/$n" --auto --squash
           fi
-      - name: Summary
+      - name: Report
         if: always()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          { echo "## qa explore"; echo '```'; cat explore.log 2>/dev/null || echo "no output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### QA explore, $(date -u +%F), [run]($RUN_URL)"
+            echo
+            cat explore-report.md 2>/dev/null || echo "The QA step did not finish, see the run log."
+            echo
+            echo "<details><summary>raw log</summary>"
+            echo
+            echo '```'
+            cat explore.log 2>/dev/null
+            echo '```'
+            echo "</details>"
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          num=$(gh issue list --label qa-log --state open --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then gh issue comment "$num" --body-file report.md; fi
