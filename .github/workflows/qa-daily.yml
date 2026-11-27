@@ -61,7 +61,17 @@ jobs:
               git add package.json package-lock.json audit
               git commit -m "agent: ticket #$n"
               git push --force "https://x-access-token:${AGENT_TOKEN}@github.com/${GH_REPO}.git" HEAD
-              GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body "Closes #$n" --base main --head "agent/$n"
+              {
+                echo "Closes #$n"
+                echo
+                echo "Opened by qa-daily. \`npm audit fix --ignore-scripts\` changed only package.json and package-lock.json, within the allowed version ranges."
+                echo
+                echo "Audit result before the fix:"
+                echo '```'
+                tail -n 15 audit.log
+                echo '```'
+              } > pr-body.md
+              GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body-file pr-body.md --base main --head "agent/$n"
               GH_TOKEN="$AGENT_TOKEN" gh pr merge "agent/$n" --auto --squash
             fi
           fi
@@ -130,7 +140,14 @@ jobs:
             git add tests audit
             git commit -m "agent: ticket #$n"
             git push --force "https://x-access-token:${AGENT_TOKEN}@github.com/${GH_REPO}.git" HEAD
-            GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body "Closes #$n" --base main --head "agent/$n"
+            {
+              echo "Closes #$n"
+              echo
+              echo "Daily regression tests written by the QA agent. Each one passed against main before this pull request was opened."
+              echo
+              cat explore-report.md
+            } > pr-body.md
+            GH_TOKEN="$AGENT_TOKEN" gh pr create --title "Ticket #$n" --body-file pr-body.md --base main --head "agent/$n"
             GH_TOKEN="$AGENT_TOKEN" gh pr merge "agent/$n" --auto --squash
           fi
       - name: Report

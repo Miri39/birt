@@ -82,6 +82,7 @@ jobs:
           git config user.email "agent@users.noreply.github.com"
           git commit -m "agent: repair ticket #$N"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/$BRANCH"
+          gh pr edit "$PR" --body-file pr-body.md
           if [ "$(cat selfcheck.status)" = pass ]; then
             gh pr edit "$PR" --title "Ticket #$N"
             gh pr merge "$PR" --auto --squash
