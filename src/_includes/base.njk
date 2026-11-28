@@ -19,6 +19,7 @@
         <li><a href="{{ '/' | url }}"{% if page.url == '/' %} aria-current="page"{% endif %}>Home</a></li>
         <li><a href="{{ '/table-1/' | url }}"{% if page.url == '/table-1/' %} aria-current="page"{% endif %}>Table 1</a></li>
         <li><a href="{{ '/table-2/' | url }}"{% if page.url == '/table-2/' %} aria-current="page"{% endif %}>Table 2</a></li>
+        <li><a href="{{ '/posts/' | url }}"{% if page.url.startsWith('/posts/') %} aria-current="page"{% endif %}>Posts</a></li>
         <li><a href="{{ '/about/' | url }}"{% if page.url == '/about/' %} aria-current="page"{% endif %}>About</a></li>
       </ul>
     </nav>

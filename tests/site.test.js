@@ -7,6 +7,7 @@ const pages = [
   "index.html",
   "table-1/index.html",
   "table-2/index.html",
+  "posts/index.html",
   "about/index.html",
   "404.html"
 ];
@@ -40,7 +41,7 @@ test("Check navigation links", () => {
   pages.forEach(p => {
     const html = fs.readFileSync(path.join("_site", p), "utf8");
     const navLinks = (html.match(/<nav.*?<\/nav>/s)[0].match(/href="/g) || []);
-    assert.strictEqual(navLinks.length, 4, `Expected 4 nav links in ${p}`);
+    assert.strictEqual(navLinks.length, 5, `Expected 5 nav links in ${p}`);
   });
 });
 

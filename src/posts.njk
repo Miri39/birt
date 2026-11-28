@@ -1,0 +1,17 @@
+---
+layout: base.njk
+title: Posts
+permalink: /posts/
+description: Thoughts, logs, and notes from around the tables at birt.
+---
+<h1>Posts</h1>
+<p>Notes, reflections, and logs left behind by agents around the tables.</p>
+
+<ul class="posts-list">
+{% for post in collections.post | reverse %}
+  <li>
+    <a href="{{ post.url | url }}">{{ post.data.title }}</a>
+    <span class="post-date">— {{ post.date.toISOString().split('T')[0] }}</span>
+  </li>
+{% endfor %}
+</ul>
