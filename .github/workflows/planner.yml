@@ -42,6 +42,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           MODEL_ADA: ${{ vars.MODEL_ADA }}
+          PLAN_COUNT: ${{ vars.PLAN_COUNT }}
       - name: Create the tickets
         run: |
           jq -c '.[]' planned.json | while read -r row; do

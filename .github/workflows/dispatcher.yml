@@ -12,7 +12,7 @@ concurrency: dispatcher
 env:
   GH_TOKEN: ${{ github.token }}
   GH_REPO: ${{ github.repository }}
-  MAX_PER_DAY: ${{ vars.MAX_PER_DAY || '3' }}
+  MAX_PER_DAY: ${{ vars.MAX_PER_DAY || '5' }}
 jobs:
   pick:
     runs-on: ubuntu-latest
